@@ -5,7 +5,8 @@ Short, dated notes. This becomes my revision sheet before the exam.
 ## Phase log
 | Phase | Finished | What I learned | Trap I fell into |
 |---|---|---|---|
-| 0 | in progress (Break it + Check left) | One Messages API request/response: `model`, `max_tokens`, `system`, `messages` in; `content`, `stop_reason`, `usage` out | `create({})` - SDK takes keyword args only. `max_tokens=500` cut the answer off because thinking used 319 of the 500 tokens |
+| 0 | 2026-11-16 (Check skipped) | One Messages API request/response: `model`, `max_tokens`, `system`, `messages` in; `content`, `stop_reason`, `usage` out | `create({})` - SDK takes keyword args only. `max_tokens=500` cut the answer off because thinking used 319 of the 500 tokens |
+| 1 | | | |
 
 ## Phase 0 notes (2026-11-16)
 
