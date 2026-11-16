@@ -1,7 +1,7 @@
 # Newsbot
 
 Learning project for the Claude Certified Architect – Foundations exam: a morning news brief
-agent that sends me a Telegram message at 09:30.
+agent that sends me a Telegram message at 08:30.
 
 - Plan: @ROADMAP.md
 - Decisions already made (don't re-open them unless I ask): @notes/DECISIONS.md

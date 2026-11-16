@@ -5,14 +5,14 @@ This file is now the source of truth. Change the plan here, not in two places.
 
 ## What you're building
 
-You are building an AI agent that sends you one Telegram message every morning at 09:30. It covers weather, your ETFs, Serbian politics from all sides, and world news, with a source link behind every claim.
+You are building an AI agent that sends you one Telegram message every morning at 08:30. It covers weather, your Holdings, Serbian politics from all sides, and world news, with a source link behind every claim.
 
 The product is the motivation. The real goal is that each feature forces you to make one design decision the exam tests, and you make it yourself, in your own code.
 
 **What the reader gets (you):**
 
 - **Weather** for Novi Sad: min/max, rain/snow chance.
-- **Markets**: your ETFs (ARKK, BRK.B, SPCX) with price per share, and EUR to RSD, expanded only when something you care about happened (for example a move larger than 1.5%).
+- **Markets**: your Holdings (ARKK, BRK.B, SPCX) with price per share, and EUR to RSD, expanded only when something you care about happened (for example a move larger than 1.5%).
 - **Serbia**: the same events as reported by outlets close to SNS, now in opposition (Novosti, NewsMax, K1, Euronews), outlets close to the student movement, now governing (N1, Danas, Nova, Vreme), and the public broadcaster RTS, whose tone tends to follow whoever governs. Where they agree, one line. Where they disagree, both versions side by side, each with its source.
 - **World and economy**: 3-5 stories that matter for a reader in Serbia (BBC, Guardian, Fox, CNN, Sky News, Al Jazeera).
 - **Coverage notes**: which sources failed today, so you know what the brief could not see.
@@ -45,47 +45,62 @@ ON X
 Coverage notes: Nova feed timed out
 Needs your judgment: 1 item
 ```
+
 (Prices in the sample are made up.)
 
 ## How it works
 
-The finished bot is a coordinator that hands research to five specialists running in parallel, then a synthesizer merges their findings, and a hook checks every claim before anything is sent.
+The finished bot is a coordinator (the hub) that sends research to five specialists running in parallel, collects their reports, has a synthesizer merge them, and sends the brief. A hook checks every claim before anything is sent.
 
 ```
-09:30 schedule ──► COORDINATOR agent ─────────────────────────► get_weather (plain tool, Phase 1)
- (Phase 8)          (Phase 7; one agent in Phases 4-6)
-                         │  5 subagent calls in ONE response (parallel)
-   ┌──────────┬──────────┼──────────────┬──────────┐
- Markets   SNS camp   Student camp     RTS      World news
- ETFs,     Novosti,   N1, Danas,     public     BBC, Guardian,
- RSD,      K1,        Nova, Vreme    service    Fox, CNN, Sky,
- economy   Euronews                             Al Jazeera
-   └──────────┴──────────┼──────────────┴──────────┘
-                         │  ResearcherReport JSON: claim, excerpt, URL, date
-                  SYNTHESIZER agent  (only tool: verify_fact)
-                         │
-                PreToolUse hook: deny send if any claim has no source URL (Phase 4)
-                         │      (denied → reason goes back, model fixes claims, retries)
-                  send_telegram (Phase 5) ──► your Telegram at 09:30
+08:30 schedule (Phase 8)
+      │
+      ▼
+COORDINATOR agent  (Phase 7; one agent in Phases 4-6)
+the hub: every call starts here, every result comes back here
+      │
+      ├─① get_weather ─────────────────────────────► plain tool (Phase 1)
+      │   ◄── weather
+      │
+      ├─② 5 subagent calls in ONE response (parallel), each with a complete prompt
+      │     ┌──────────┬──────────┬──────────────┬──────────┐
+      │   Markets   SNS camp   Student camp     RTS      World news
+      │   Holdings, Novosti,   N1, Danas,     public     BBC, Guardian,
+      │   RSD,      K1,        Nova, Vreme    service    Fox, CNN, Sky,
+      │   economy   Euronews                             Al Jazeera
+      │     └──────────┴──────────┴──────────────┴──────────┘
+      │   ◄── 5 ResearcherReports (claim, excerpt, URL, date) or structured errors;
+      │       the coordinator retries, or turns a failure into a coverage note
+      │
+      ├─③ all reports + weather ──────────────────► SYNTHESIZER agent (only tool: verify_fact)
+      │   ◄── draft brief
+      │
+      └─④ send_telegram (Phase 5)
+            │
+            ▼
+      PreToolUse hook (Phase 4): deny the send if any claim has no source URL
+            │   denied → reason goes back to the coordinator, which fixes the claims and retries
+            ▼
+      your Telegram at 08:30
 ```
 
 Why each piece exists:
 
-- **Coordinator** decides what is needed today and writes complete prompts for the subagents, because subagents don't see its conversation (1.3).
+- **Coordinator** decides what is needed today and writes complete prompts for the subagents, because subagents don't see its conversation (1.3). Every report comes back to it, and it alone calls the synthesizer and the send step. Subagents never talk to each other (1.2).
 - **Researchers split by camp, not topic.** The SNS camp, the student camp and RTS each get their own agent, so no side can crowd out the others in one context (1.2). Camps don't flip when power changes; who governs is one line in config.
 - **Weather is a plain tool call.** Not every task needs an agent.
-- **Synthesizer** sees only structured findings and has one narrow tool, so it can't wander off into new research (2.3).
+- **Synthesizer** sees only structured findings and has one narrow tool, so it can't wander off into new research (2.3). It controls no one: it gets the reports and returns a draft brief.
 - **The hook** turns "always cite sources" from a request into a guarantee (1.5). A second hook, PostToolUse, rewrites every date into one format before the model sees it.
 - **Structured errors** flow upward at every step, so a dead feed becomes a coverage note instead of a silently one-sided brief (5.3).
 
 ## How it maps to the exam
 
-| Exam exercise | Phases | Where it lives in the bot | Task statements |
-| --- | --- | --- | --- |
+| Exam exercise                       | Phases     | Where it lives in the bot                                                                                                                                               | Task statements              |
+| ----------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
 | 1. Multi-tool agent with escalation | 1, 2, 4, 5 | Weather, feed, search and market tools; your own agentic loop; structured errors when a feed is down; a hook that blocks unsourced claims; a "needs your judgment" flag | 1.1, 1.4, 1.5, 2.1, 2.2, 5.2 |
-| 2. Claude Code team workflow | 3, 8 | CLAUDE.md, path-scoped rules for prompt files, a dry-run skill, `.mcp.json` with the Telegram token as a variable, plan mode, CI review | 3.1-3.6, 2.4 |
-| 3. Structured extraction pipeline | 6, 8 | Each article becomes a validated JSON record; retry with the error; Batch API for a weekly report; confidence-based review | 4.1-4.5, 5.5 |
-| 4. Multi-agent research pipeline | 7 | Coordinator, parallel researchers split by camp, synthesis that keeps sources and shows conflicts | 1.2, 1.3, 2.3, 5.3, 5.6 |
+| 2. Claude Code team workflow        | 3, 8       | CLAUDE.md, path-scoped rules for prompt files, a dry-run skill, `.mcp.json` with the Telegram token as a variable, plan mode, CI review                                 | 3.1-3.6, 2.4                 |
+| 3. Structured extraction pipeline   | 6, 8       | Each article becomes a validated JSON record; retry with the error; Batch API for a weekly report; confidence-based review                                              | 4.1-4.5, 5.5                 |
+| 4. Multi-agent research pipeline    | 7          | Coordinator, parallel researchers split by camp, synthesis that keeps sources and shows conflicts                                                                       | 1.2, 1.3, 2.3, 5.3, 5.6      |
 
 Exam domain weights: Agentic architecture 27%, Claude Code configuration 20%, Prompt engineering and structured output 20%, Tool design and MCP 18%, Context management and reliability 15%. The full guide is in `docs/CCA-F-exam-guide.pdf`.
 
@@ -113,13 +128,13 @@ STAGE 3  Scale and automate     P5b X trends (optional) · P6 Structured extract
 - **Goal:** Claude decides by itself to call `get_weather` and `fetch_feed`, then answers.
 - **You build:** two tools with JSON schemas, and a `while` loop driven by `stop_reason`.
 - **You learn:** tool use, `tool_use` vs `end_turn`, returning `tool_result` by id; why parsing the text for "done" is wrong (1.1). Tool descriptions as the model's only guide for choosing (2.1).
-- **Why now:** in Phase 0 *you* decided what to fetch. An agent decides itself.
+- **Why now:** in Phase 0 _you_ decided what to fetch. An agent decides itself.
 - **Done when:** one question needing both tools works, and you can say why the loop ends.
 
 ### Phase 2 - Tools that fail
 
 - **Goal:** the agent stays useful when N1 times out or a site returns 403.
-- **You build:** `search_news` (deliberately similar to `fetch_feed`), `get_etf_quotes`, `get_rsd_rates`; a structured error type with category and `is_retryable`; a "chaos" switch to fake outages; `config/sources.yaml` with outlets and camps.
+- **You build:** `search_news` (deliberately similar to `fetch_feed`), `get_holdings_quotes`, `get_rsd_rates`; a structured error type with category and `is_retryable`; a "chaos" switch to fake outages; `config/sources.yaml` with outlets and camps.
 - **You learn:** transient vs validation vs permission vs business errors (2.2); empty result vs failure; what to retry and what to report (5.3); why vague tool descriptions cause wrong tool picks.
 - **Why now:** with 5 real tools, some will fail every week. You need this before going multi-agent.
 - **Done when:** a faked timeout is retried, a faked 403 is reported, and the brief names the gap.
@@ -152,7 +167,7 @@ STAGE 3  Scale and automate     P5b X trends (optional) · P6 Structured extract
 
 - **Goal:** a "Talked about on X" section with Serbian trends, cross-checked against the news.
 - **You build:** a `get_x_trends` tool on the X API (pay-per-use, about $0.01 per trends request); a new rule in the PreToolUse hook: an x.com post can never be the source of a claim; a cross-check of which camps covered each trend.
-- **You learn:** signal vs evidence and provenance (5.6); a tool description that also says what it does *not* return (2.1); extending a hook with a new rule (1.5).
+- **You learn:** signal vs evidence and provenance (5.6); a tool description that also says what it does _not_ return (2.1); extending a hook with a new rule (1.5).
 - **Why now:** only after the core brief works. It's one tool and one section; in Phase 7 it can become a sixth researcher.
 - **Before building:** check that Serbia or Belgrade is in X's list of trend locations. If not, skip this phase. Trends alone cost cents a month; reading posts for context costs $0.005 per post.
 - **Done when:** the brief shows lines like "#topic is trending; N1 covered it, the SNS camp didn't", and no claim cites an x.com URL.
@@ -179,7 +194,7 @@ STAGE 3  Scale and automate     P5b X trends (optional) · P6 Structured extract
 - **You build:** a scheduled job (GitHub Actions or cron), run logs, a CI step that runs `claude -p` to review prompt changes, a weekly "how each outlet framed the week" report on the Batch API.
 - **You learn:** CI mode and JSON output (3.6); independent review instances (4.6); when batch is right and when it isn't (4.5); crash recovery from saved state (5.4).
 - **Why now:** a bot you have to start by hand isn't a product.
-- **Done when:** a week of briefs arrive at 09:30 without you touching anything.
+- **Done when:** a week of briefs arrive at 08:30 without you touching anything.
 
 ## How the project grows
 
@@ -192,7 +207,7 @@ newsbot/
 │   └── markets.py                P2
 ├── loop.py                       P1  your hand-written agentic loop
 ├── errors.py                     P2  structured tool errors
-├── config/sources.yaml etfs.yaml P2  outlets, camps, your ETFs
+├── config/sources.yaml holdings.yaml P2  outlets, camps, your Holdings
 ├── CLAUDE.md                     P0→ project memory for Claude Code (extended in P3)
 ├── .claude/rules/ skills/        P3  path rules, /brief-dryrun
 ├── .mcp.json  mcp_server.py      P3  your tools inside Claude Code
@@ -208,7 +223,7 @@ newsbot/
 └── .github/workflows/            P8  schedule and CI review
 ```
 
-**Stack:** Python 3.11+, `anthropic` (Phases 0-2, 6), `claude-agent-sdk` (Phases 4-8), `feedparser`, `httpx`, `pydantic`, `pytest`. Data sources: Open-Meteo for weather, outlet RSS feeds, a Yahoo chart endpoint for ETFs, NBS rates for RSD, X API (optional, paid).
+**Stack:** Python 3.11+, `anthropic` (Phases 0-2, 6), `claude-agent-sdk` (Phases 4-8), `feedparser`, `httpx`, `pydantic`, `pytest`. Data sources: Open-Meteo for weather, outlet RSS feeds, a Yahoo chart endpoint for Holdings, NBS rates for RSD, X API (optional, paid).
 
 ## How we work each phase
 
@@ -234,5 +249,5 @@ Every phase runs the same five steps: you write the code that matters for the ex
 
 - [ ] An Anthropic API key with a small monthly spend limit (measure the real cost per brief from `usage` in Phase 0)
 - [ ] Python 3.11+, VS Code, and the Claude Code extension
-- [ ] Your ETF tickers as Yahoo Finance symbols (check each one)
+- [ ] Your Holdings tickers as Yahoo Finance symbols (check each one)
 - [ ] A Telegram account (the bot itself is created in Phase 5)
