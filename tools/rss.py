@@ -4,6 +4,10 @@ import feedparser
 import httpx2
 
 
+class FeedParseError(Exception):
+    """The URL answered, but the body is not a readable RSS/Atom feed."""
+
+
 def fetch_feed(url: str, limit: int = 5) -> list[dict]:
     """Return the first `limit` items of an RSS feed as {title, link, published}."""
     # Download with httpx2 (system trust store), not feedparser's urllib,
@@ -12,7 +16,7 @@ def fetch_feed(url: str, limit: int = 5) -> list[dict]:
     resp.raise_for_status()
     feed = feedparser.parse(resp.content)
     if feed.bozo and not feed.entries:
-        raise RuntimeError(f"Could not read feed {url}: {feed.bozo_exception}")
+        raise FeedParseError(f"Could not read feed {url}: {feed.bozo_exception}")
     return [
         {
             "title": e.get("title", "").strip(),

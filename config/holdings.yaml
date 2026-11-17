@@ -1,0 +1,15 @@
+# My Holdings for the MARKETS section (see notes/DECISIONS.md).
+# Tickers as I know them; the Yahoo adapter converts them (BRK.B -> BRK-B).
+# EUR -> RSD (NBS middle rate) is always shown and needs no config.
+
+# A daily move larger than this (in %, either direction) counts as notable and gets
+# expanded in the brief. Starting value; refine later.
+notable_move_pct: 1.5
+
+holdings:
+  - ticker: ARKK
+    name: ARK Innovation ETF
+  - ticker: BRK.B
+    name: Berkshire Hathaway
+  - ticker: SPCX
+    name: SpaceX

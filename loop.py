@@ -1,115 +1,13 @@
 """Phase 1: hand-written agentic loop with two tools."""
 
 import json
+import traceback
 
 import anthropic
 from dotenv import load_dotenv
 
-from tools import rss, weather
-
-# --- Tool 1: get_weather ------------------------------------------------------
-# Coordinates live in code, not in the model's head: the model is not a reliable
-# geocoder. The enum below is built from these keys, so the model can only send
-# a city we can actually look up.
-CITIES = {
-    "Novi Sad": (45.2671, 19.8335),
-    "Belgrade": (44.8125, 20.4612),
-}
-
-# A tool definition is ALL the model knows about a tool: name, description,
-# input_schema. It never sees the Python code or its docstrings (2.1).
-# A good description says: what it returns, when to use it, what it does NOT do,
-# and what to do instead for unsupported input.
-GET_WEATHER_TOOL = {
-    "name": "get_weather",  # must match the key in HANDLERS (block.name arrives as this string)
-    "description": (
-        "Get the daily weather forecast for a city in Serbia, starting today "
-        "(Europe/Belgrade time). Returns one entry per day with: date (YYYY-MM-DD), "
-        "min_c and max_c (°C), precip_chance_pct (highest chance of rain or snow "
-        "that day, 0-100), and snowfall_cm (expected snow; > 0 means snow is likely). "
-        "Use it whenever the user asks about weather, temperature, rain or snow. "
-        "It does NOT return past weather, hourly detail, wind or air quality, and "
-        "only supports the cities listed in the `city` enum. For any other city, "
-        "say it is not supported instead of picking the nearest one."
-    ),
-    # JSON Schema for the arguments. block.input arrives as a dict shaped like this.
-    # The schema guides the model; it is not a hard guarantee (strict mode: Phase 6).
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "city": {
-                "type": "string",
-                "enum": list(CITIES),  # only these exact values are allowed
-                "description": "City to forecast, e.g. \"Novi Sad\".",
-            },
-            "days": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 7,  # small range = small tool result = less context (5.1)
-                "description": "Number of days starting today. Use 1 for today only.",
-            },
-        },
-        "required": ["city"],  # days is optional; its default lives in the adapter
-    },
-}
-
-
-def run_get_weather(tool_input: dict) -> list[dict]:
-    """Adapter: tool input (what the model sends) -> Python function call."""
-    # The tool interface (city name) and the Python signature (lat/lon) are
-    # deliberately different; this function is the bridge.
-    lat, lon = CITIES[tool_input["city"]]
-    return weather.get_forecast(lat, lon, days=tool_input.get("days", 1))
-
-
-# --- Tool 2: fetch_feed -------------------------------------------------------
-# Feed URLs live in code, from a list I control (DECISIONS.md): the model never
-# invents a URL. Same pattern as CITIES.
-FEEDS = {
-    "bbc_world": "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "guardian_world": "https://www.theguardian.com/world/rss",
-    "aljazeera": "https://www.aljazeera.com/xml/rss/all.xml",
-}
-
-FETCH_FEED_TOOL = {
-    "name": "fetch_feed",
-    # "Call it once per outlet" -> one call per source, can run in parallel.
-    # "does NOT search by topic" -> keeps it apart from search_news in Phase 2,
-    # where overlapping tools make the description the only way to choose.
-    "description": (
-        "Get the latest headlines from one news outlet's RSS feed, newest first. "
-        "Returns a list of items, each with: title, link (the article URL, to cite "
-        "as the source) and published (date string as the outlet gives it, or "
-        "\"unknown\"). Use it when the user asks what is in the news, or for "
-        "headlines from a specific outlet. Call it once per outlet. "
-        "It does NOT search by topic or keyword, and does NOT return the article "
-        "text: only the headline and link. Only the outlets in the `source` enum "
-        "are available; for any other outlet, say it is not supported."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "source": {
-                "type": "string",
-                "enum": list(FEEDS),
-                "description": "Outlet to read, e.g. \"bbc_world\".",
-            },
-            "limit": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 10,
-                "description": "How many of the newest items to return. Default 5.",
-            },
-        },
-        "required": ["source"],
-    },
-}
-
-
-def run_fetch_feed(tool_input: dict) -> list[dict]:
-    """Adapter: tool input (what the model sends) -> Python function call."""
-    url = FEEDS[tool_input["source"]]
-    return rss.fetch_feed(url, limit=tool_input.get("limit", 5))
+from errors import ToolError
+from tools.definitions import TOOLS, HANDLERS
 
 
 # --- Loop configuration -------------------------------------------------------
@@ -117,16 +15,49 @@ MODEL = "claude-haiku-5-5"
 # Safety net against a runaway loop (and a runaway bill). NOT how the loop
 # normally ends: that is end_turn. Hitting this cap means something is wrong (1.1).
 MAX_ITERATIONS = 10
-# What we send to the API on every call (tool definitions count as input tokens).
-TOOLS = [GET_WEATHER_TOOL, FETCH_FEED_TOOL]
-# Tool name (what the model asks for) -> adapter (what we run).
-# Values are functions, not calls (no parentheses). Keys come from the tool dicts
-# so a rename can't break the lookup.
-HANDLERS = {
-    GET_WEATHER_TOOL["name"]: run_get_weather,
-    FETCH_FEED_TOOL["name"]: run_fetch_feed,
-}
 
+
+def run_tool(block) -> dict:
+    """Run one tool_use block and ALWAYS return its tool_result, even on failure.
+
+    A failure becomes data the model can reason about (2.2), instead of crashing
+    run() and losing the results that already worked (5.3).
+    """
+    try:
+        if block.name not in HANDLERS:
+            # The model asked for a tool that doesn't exist: a different input
+            # (the right name) would work, so this is validation.
+            raise ToolError(
+                "validation", False,
+                f"Unknown tool {block.name!r}. Available tools: {list(HANDLERS)}.",
+                source=block.name,
+            )
+        output = HANDLERS[block.name](block.input)
+        return {
+            "type": "tool_result",
+            "tool_use_id": block.id,  # links this result to its request
+            "content": json.dumps(output),  # content must be a string
+        }
+    # Most specific first: ToolError IS an Exception, so the order matters.
+    except ToolError as err:
+        # Classified by the adapter: send it as is.
+        error = err.to_dict()
+    except Exception:
+        # Not classified = a bug in MY code. The traceback is for me (stderr),
+        # not for the model: it is noise there and leaks code details.
+        traceback.print_exc()
+        error = ToolError(
+            "permission", False,  # only a human (me) can fix a bug
+            "Internal error in the tool, not a problem with your input. "
+            "Do not retry. Report it as a coverage gap.",
+            source=block.name,
+        ).to_dict()
+    return {
+        "type": "tool_result",
+        "tool_use_id": block.id,  # every tool_use still gets its answer
+        "is_error": True,
+        "content": json.dumps(error),
+    }
 
 def run(question: str) -> str:
     """Run the agentic loop until the model ends its turn; return its text answer."""
@@ -168,14 +99,7 @@ def run(question: str) -> str:
         results = []
         for block in response.content:
             if block.type == "tool_use":
-                # Phase 1 gap: an exception here (feed down) or an unknown name
-                # (KeyError) crashes run(). Phase 2: catch it, send is_error (2.2).
-                output = HANDLERS[block.name](block.input)
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,  # links this result to its request
-                    "content": json.dumps(output),  # content must be a string
-                })
+                results.append(run_tool(block))
         # 5. All results go back in ONE user turn, then loop: the model now sees
         # question -> its tool request -> our results.
         messages.append({"role": "user", "content": results})

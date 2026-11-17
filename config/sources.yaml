@@ -1,0 +1,97 @@
+# News outlets the bot reads, grouped by the camp they are close to (see notes/DECISIONS.md).
+# Camps are my editorial call: review them every few months and bump labels_reviewed.
+# Outlet keys (n1, danas, ...) are the enum values the model sends: keep them stable.
+# Informer is deliberately not included.
+
+labels_reviewed: 2026-11-17
+
+government:
+  current: "Studentska lista"
+  since: 2026-10-25
+  status: "vlada u formiranju"
+
+# Allowed camps: sns (close to SNS, now opposition), student (close to the student
+# movement, now governing), public (public broadcaster), world (foreign outlets).
+outlets:
+  # --- SNS camp ---------------------------------------------------------------
+  novosti:
+    name: Novosti
+    camp: sns
+    language: sr-Latn
+    url: https://www.novosti.rs/rss/vesti
+  newsmax:
+    name: NewsMax Balkans
+    camp: sns
+    language: sr-Latn
+    url: https://newsmaxbalkans.com/feed
+  pink:
+    name: Pink
+    camp: sns
+    language: sr-Latn
+    url: https://pink.rs/feed/politika  # mixes in general news, not only politics
+  euronews:
+    name: Euronews Srbija
+    camp: sns
+    language: sr-Latn
+    url: https://www.euronews.rs/rss/srbija
+
+  # --- Student camp -----------------------------------------------------------
+  n1:
+    name: N1
+    camp: student
+    language: sr-Latn
+    url: https://n1info.rs/feed/
+  danas:
+    name: Danas
+    camp: student
+    language: sr-Latn
+    url: https://www.danas.rs/feed/
+  nova:
+    name: Nova
+    camp: student
+    language: sr-Latn
+    url: https://nova.rs/feed/
+  vreme:
+    name: Vreme
+    camp: student
+    language: sr-Latn
+    url: https://vreme.com/feed/
+
+  # --- Public broadcaster -----------------------------------------------------
+  rts:
+    name: RTS
+    camp: public
+    language: sr-Cyrl  # headlines are in Cyrillic
+    url: https://www.rts.rs/vesti/rss.html
+
+  # --- World ------------------------------------------------------------------
+  bbc:
+    name: BBC
+    camp: world
+    language: en
+    url: https://feeds.bbci.co.uk/news/world/rss.xml
+  guardian:
+    name: The Guardian
+    camp: world
+    language: en
+    url: https://www.theguardian.com/world/rss
+  fox:
+    name: Fox News
+    camp: world
+    language: en
+    url: https://moxie.foxnews.com/google-publisher/world.xml
+  cnn:
+    name: CNN
+    camp: world
+    language: en
+    url: http://rss.cnn.com/rss/edition_world.rss
+  sky:
+    name: Sky News
+    camp: world
+    language: en
+    url: https://feeds.skynews.com/feeds/rss/world.xml
+  aljazeera:
+    name: Al Jazeera
+    camp: world
+    language: en
+    url: https://www.aljazeera.com/xml/rss/all.xml

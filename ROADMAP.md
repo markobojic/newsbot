@@ -13,7 +13,7 @@ The product is the motivation. The real goal is that each feature forces you to 
 
 - **Weather** for Novi Sad: min/max, rain/snow chance.
 - **Markets**: your Holdings (ARKK, BRK.B, SPCX) with price per share, and EUR to RSD, expanded only when something you care about happened (for example a move larger than 1.5%).
-- **Serbia**: the same events as reported by outlets close to SNS, now in opposition (Novosti, NewsMax, K1, Euronews), outlets close to the student movement, now governing (N1, Danas, Nova, Vreme), and the public broadcaster RTS, whose tone tends to follow whoever governs. Where they agree, one line. Where they disagree, both versions side by side, each with its source.
+- **Serbia**: the same events as reported by outlets close to SNS, now in opposition (Novosti, NewsMax, Pink, Euronews), outlets close to the student movement, now governing (N1, Danas, Nova, Vreme), and the public broadcaster RTS, whose tone tends to follow whoever governs. Where they agree, one line. Where they disagree, both versions side by side, each with its source.
 - **World and economy**: 3-5 stories that matter for a reader in Serbia (BBC, Guardian, Fox, CNN, Sky News, Al Jazeera).
 - **Coverage notes**: which sources failed today, so you know what the brief could not see.
 - **Needs your judgment**: items the agent refuses to conclude on, such as two credible sources stating different facts.
@@ -66,7 +66,7 @@ the hub: every call starts here, every result comes back here
       │     ┌──────────┬──────────┬──────────────┬──────────┐
       │   Markets   SNS camp   Student camp     RTS      World news
       │   Holdings, Novosti,   N1, Danas,     public     BBC, Guardian,
-      │   RSD,      K1,        Nova, Vreme    service    Fox, CNN, Sky,
+      │   RSD,      Pink,      Nova, Vreme    service    Fox, CNN, Sky,
       │   economy   Euronews                             Al Jazeera
       │     └──────────┴──────────┴──────────────┴──────────┘
       │   ◄── 5 ResearcherReports (claim, excerpt, URL, date) or structured errors;
@@ -158,7 +158,7 @@ STAGE 3  Scale and automate     P5b X trends (optional) · P6 Structured extract
 ### Phase 5 - First real brief on Telegram
 
 - **Goal:** a complete single-agent brief arrives on your phone.
-- **You build:** a Telegram bot via @BotFather, a `send_telegram` tool, a `flag_for_review` tool, the full system prompt with explicit escalation rules and examples.
+- **You build:** a Telegram bot via @BotFather, a `send_telegram` tool, a `flag_for_review` tool, the full system prompt with explicit escalation rules and examples. The prompt explains what each camp in `fetch_feed` means (`sns` = close to SNS, `student` = close to the student movement, `public` = public broadcaster, `world` = foreign outlets), in neutral wording (DECISIONS.md).
 - **You learn:** explicit criteria instead of "flag uncertain things" (4.1, 5.2); few-shot examples for the flag/don't-flag boundary (4.2); keeping tool output small so context doesn't bloat (5.1).
 - **Why now:** milestone. From here you use the product daily, and its weaknesses drive Phases 6-7.
 - **Done when:** you read it on your phone and every claim has a working link.

@@ -35,7 +35,8 @@ Made in the planning chat, 22-28 Oct 2026. Update this file when a decision chan
   Those labels flip when power changes (Student List won the 25 Oct 2026 election, SNS went
   into opposition; government still being formed as of 28 Oct 2026).
 - Camps (my editorial call, review every few months):
-    - **SNS camp** (now opposition): Novosti, NewsMax, K1, Euronews
+    - **SNS camp** (now opposition): Novosti, NewsMax, Pink, Euronews
+      (2026-11-17: Pink replaced K1, whose RSS feed returned HTTP 500.)
     - **Student camp** (now governing): N1, Danas, Nova, Vreme
     - **Public broadcaster**: RTS — tone tends to follow whoever governs
 - **Do not include Informer.**

@@ -42,7 +42,7 @@ def test_fetch_feed_respects_limit(monkeypatch):
 
 def test_fetch_feed_raises_on_garbage(monkeypatch):
     monkeypatch.setattr(rss.httpx2, "get", lambda *a, **kw: FakeResponse(b"not xml <<<"))
-    with pytest.raises(RuntimeError):
+    with pytest.raises(rss.FeedParseError):
         rss.fetch_feed("https://x.test/feed")
 
 
