@@ -98,7 +98,7 @@ def _retry_after(response: httpx2.Response) -> float | None:
     return float(value) if value.isdigit() else None
 
 
-def with_retries(call: Callable[[], T], attempts: int = MAX_ATTEMPTS, sleep=time.sleep) -> T:
+def with_retries(call: Callable[[], T], attempts: int = MAX_ATTEMPTS, sleep=None) -> T:
     """Run call(); retry it only on a retryable ToolError, with exponential backoff.
 
     Lives with the adapters, not the loop, so it still works when the same tools run
@@ -125,5 +125,6 @@ def with_retries(call: Callable[[], T], attempts: int = MAX_ATTEMPTS, sleep=time
                 f"({err.message}); waiting {delay:g}s",
                 file=sys.stderr,
             )
-            sleep(delay)
+            # Looked up at call time (not as a default arg) so tests can patch time.sleep.
+            (sleep or time.sleep)(delay)
     raise AssertionError("unreachable")  # the loop always returns or raises

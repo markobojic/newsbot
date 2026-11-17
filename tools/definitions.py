@@ -2,7 +2,7 @@ import httpx2
 
 from config import load_sources
 from errors import ToolError, from_http_error, with_retries
-from tools import rss, weather
+from tools import chaos, rss, weather
 
 # --- Tool 1: get_weather ------------------------------------------------------
 # Coordinates live in code, not in the model's head: the model is not a reliable
@@ -69,6 +69,7 @@ def run_get_weather(tool_input: dict) -> list[dict]:
 
     def call():
         try:
+            chaos.maybe_fail("open-meteo")  # no-op unless CHAOS is set
             return weather.get_forecast(lat, lon, days=tool_input.get("days", 1))
         except httpx2.HTTPError as exc:
             # Only HTTP failures are translated. Anything else is a bug in my code
@@ -137,6 +138,7 @@ def run_fetch_feed(tool_input: dict) -> list[dict]:
 
     def call():
         try:
+            chaos.maybe_fail(source)  # no-op unless CHAOS is set
             return rss.fetch_feed(FEEDS[source], limit=tool_input.get("limit", 5))
         except httpx2.HTTPError as exc:
             # The adapter is the only layer that knows this URL is "n1": rss.py only
