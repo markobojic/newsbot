@@ -1,7 +1,7 @@
 import httpx2
 
 from config import load_sources
-from errors import ToolError, from_http_error
+from errors import ToolError, from_http_error, with_retries
 from tools import rss, weather
 
 # --- Tool 1: get_weather ------------------------------------------------------
@@ -66,12 +66,17 @@ def run_get_weather(tool_input: dict) -> list[dict]:
             source="get_weather",
         )
     lat, lon = CITIES[city]
-    try:
-        return weather.get_forecast(lat, lon, days=tool_input.get("days", 1))
-    except httpx2.HTTPError as exc:
-        # Only HTTP failures are translated. Anything else is a bug in my code and
-        # must reach the loop's safety net unclassified.
-        raise from_http_error(exc, "open-meteo") from exc
+
+    def call():
+        try:
+            return weather.get_forecast(lat, lon, days=tool_input.get("days", 1))
+        except httpx2.HTTPError as exc:
+            # Only HTTP failures are translated. Anything else is a bug in my code
+            # and must reach the loop's safety net unclassified.
+            raise from_http_error(exc, "open-meteo") from exc
+
+    # Validation above runs once; only the network call is retried.
+    return with_retries(call)
 
 
 # --- Tool 2: fetch_feed -------------------------------------------------------
@@ -129,21 +134,25 @@ def run_fetch_feed(tool_input: dict) -> list[dict]:
             "If the user asked for an outlet that is not listed, say it is not supported.",
             source=str(source),
         )
-    try:
-        return rss.fetch_feed(FEEDS[source], limit=tool_input.get("limit", 5))
-    except httpx2.HTTPError as exc:
-        # The adapter is the only layer that knows this URL is "n1": rss.py only
-        # sees a URL, the loop doesn't know HTTP. So the translation lives here.
-        raise from_http_error(exc, source) from exc
-    except rss.FeedParseError as exc:
-        # 200 OK but not a feed (e.g. an HTML page): the URL in config is wrong.
-        # Waiting won't fix it and the model can't; only I can (see errors.py).
-        raise ToolError(
-            "permission", False,
-            f"{source} returned something that is not a readable feed; the config "
-            "probably needs updating. Do not retry. Report it as a coverage gap.",
-            source,
-        ) from exc
+
+    def call():
+        try:
+            return rss.fetch_feed(FEEDS[source], limit=tool_input.get("limit", 5))
+        except httpx2.HTTPError as exc:
+            # The adapter is the only layer that knows this URL is "n1": rss.py only
+            # sees a URL, the loop doesn't know HTTP. So the translation lives here.
+            raise from_http_error(exc, source) from exc
+        except rss.FeedParseError as exc:
+            # 200 OK but not a feed (e.g. an HTML page): the URL in config is wrong.
+            # Waiting won't fix it and the model can't; only I can (see errors.py).
+            raise ToolError(
+                "permission", False,
+                f"{source} returned something that is not a readable feed; the config "
+                "probably needs updating. Do not retry. Report it as a coverage gap.",
+                source,
+            ) from exc
+
+    return with_retries(call)
 
 # What we send to the API on every call (tool definitions count as input tokens).
 TOOLS = [GET_WEATHER_TOOL, FETCH_FEED_TOOL]
