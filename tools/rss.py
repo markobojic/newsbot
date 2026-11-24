@@ -8,8 +8,8 @@ class FeedParseError(Exception):
     """The URL answered, but the body is not a readable RSS/Atom feed."""
 
 
-def fetch_feed(url: str, limit: int = 5) -> list[dict]:
-    """Return the first `limit` items of an RSS feed as {title, link, published}."""
+def fetch_feed(url: str, limit: int | None = 5) -> list[dict]:
+    """Return the first `limit` items (None = all) of an RSS feed as {title, link, published}."""
     # Download with httpx2 (system trust store), not feedparser's urllib,
     # which fails on macOS python.org builds with CERTIFICATE_VERIFY_FAILED.
     resp = httpx2.get(url, timeout=10, follow_redirects=True)
