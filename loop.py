@@ -1,6 +1,7 @@
 """Phase 1: hand-written agentic loop with two tools."""
 
 import json
+import sys
 import traceback
 
 import anthropic
@@ -23,6 +24,8 @@ def run_tool(block) -> dict:
     A failure becomes data the model can reason about (2.2), instead of crashing
     run() and losing the results that already worked (5.3).
     """
+    # Which tool the MODEL chose, with what input: the only way to see tool choice (2.1).
+    print(f"[tool] {block.name} {json.dumps(block.input, ensure_ascii=False)}", file=sys.stderr)
     try:
         if block.name not in HANDLERS:
             # The model asked for a tool that doesn't exist: a different input
@@ -108,5 +111,5 @@ def run(question: str) -> str:
 
 
 if __name__ == "__main__":
-    answer = run("What's the weather in Novi Sad today, and what are the top world headlines from BBC?")
+    answer = run("How are my stocks doing?")
     print(answer)

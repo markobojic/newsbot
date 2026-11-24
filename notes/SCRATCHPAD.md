@@ -87,6 +87,47 @@ Short, dated notes. This becomes my revision sheet before the exam.
 - First step of Phase 2: move tool definitions + adapters + HANDLERS to their own module
   (`loop.py` keeps only the loop; MCP server and SDK will reuse the same definitions).
 
+## Phase 2 notes (2026-11-24)
+
+**Observed: "How are my stocks doing?" (2.1, 5.6)**
+- ARKK +8.0% and SPCX +4.35% were `notable`. Claude searched `search_news` for "ARK Innovation",
+  "ARK", "SpaceX", "Space", found nothing relevant and said so instead of guessing a cause.
+  The description's rule ("if none is found, say no reason was found") worked, with no system prompt.
+- It found nothing because my feeds are politics/world only: no business feeds = no market
+  explanations. A tool can only find what its sources contain. Add business feeds for the
+  Markets researcher in Phase 7, not now.
+- Substring search is too broad for short queries: "ARK" also matches "Market", "Mark", "park".
+  Whole-word matching would fix it but breaks Serbian word endings ("Vukićević" vs
+  "Vukićevića"). Precision vs recall tradeoff; revisit in Phase 6/7.
+
+**Error lessons (2.2, 5.3). Phase 7: researchers return these errors to the coordinator**
+- Category = who can fix it: transient -> time (retry), validation -> the model (different
+  input), permission -> a human (access, wrong URL in config), business -> nobody (a valid "no":
+  accept it, report it).
+- Validation = the INPUT is wrong. If the input is valid and the server has a problem, it is
+  never validation. 429 = transient, retry after waiting (`Retry-After`, capped).
+- 404 on a configured feed = permission, not validation: the model sent a valid source, my
+  config has the wrong URL. Calling it validation makes the model try other outlets.
+- Claude sees only `is_error` + text. `ToolError` is for MY code (adapter -> loop, later
+  subagent -> coordinator); the `message` is a prompt for Claude: what failed, what was
+  already tried, what to do, what NOT to do ("do not substitute another outlet").
+- Whoever retries says so: after the last attempt `is_retryable` becomes False (category stays
+  transient), or the model retries and the attempts multiply.
+- Retries live in the adapters, not the loop: the loop disappears in Phase 3/4 (MCP, SDK).
+- Catch narrow exceptions in the adapter (`httpx2.HTTPError`), broad ones only in the loop's
+  safety net. Otherwise bugs look like outages.
+- A broken config is my bug, not a tool error: crash at startup, never send it to the model.
+- Empty result != failure. `searched` + no results = did not cover it (a finding);
+  `failed_sources` = unknown (a gap). Never say a failed outlet "ignored" a topic.
+- Partial results beat all-or-nothing: one dead feed must not throw away the others.
+
+**Balance lessons. Phase 7: camp researchers and the synthesizer**
+- The order and cutoff of tool results can bias the model. A balanced source list isn't enough;
+  the tool must also return a balanced result (round-robin before the cap in `search_news`).
+- Substituting an outlet is only wrong when it is silent or crosses camps (N1 down -> reading
+  Danas twice hides the gap). Rule for the Phase 5 prompt: never substitute silently.
+- Decide fixed rules in code, not in the model: `notable = abs(change_pct) > 1.5` (4.1).
+
 ## Exam traps (collected)
 - Decide by `stop_reason`, never by parsing the text (1.1). `max_tokens` = truncated answer,
   treat as a failure, not a valid result.

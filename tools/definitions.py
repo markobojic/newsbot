@@ -2,9 +2,9 @@ from itertools import zip_longest
 
 import httpx2
 
-from config import CAMPS, load_sources
+from config import CAMPS, load_holdings, load_sources
 from errors import ToolError, from_http_error, with_retries
-from tools import chaos, rss, weather
+from tools import chaos, markets, rss, weather
 from tools.parallel import fetch_all
 from tools.text import normalize
 
@@ -279,9 +279,97 @@ def run_search_news(tool_input: dict) -> dict:
         "truncated": len(matches) > MAX_SEARCH_RESULTS,
     }
 
+# --- Tool 4: get_holdings_quotes ----------------------------------------------
+# No parameters on purpose: which stocks I hold is MY decision (config/holdings.yaml),
+# so the model can't invent, forget or misspell a ticker. With nothing to choose,
+# the name and description are its only guide for when to call it (2.1).
+GET_HOLDINGS_QUOTES_TOOL = {
+    "name": "get_holdings_quotes",
+    "description": (
+        "Get the last closing price and daily change for each of the user's stock "
+        "holdings (the fixed list in the user's config; it takes no input). Use it "
+        "whenever the user asks about their stocks, holdings, portfolio or markets. "
+        "Returns quotes, each with: ticker, name (company name, as used in headlines), "
+        "price, currency, change_pct (last close vs the close before it, in %), "
+        "notable (true if the absolute move is above notable_move_pct) and as_of "
+        "(date of that close, YYYY-MM-DD). Also returns failed (holdings that could "
+        "not be read, with the reason) and notable_move_pct. "
+        "Prices are the LAST CLOSE, not live: say \"closed at\" with the as_of date, "
+        "never \"is trading at\". Use `notable` as given; do not apply your own "
+        "threshold. For a notable move, look for a reason with search_news using the "
+        "company name; if none is found, say no reason was found instead of guessing. "
+        "Report every holding in `failed` as unavailable; never leave it out silently. "
+        "Source to cite: Yahoo Finance. It does NOT return stocks the user does not "
+        "hold, intraday prices or price history; for any other stock, say it is not "
+        "supported."
+    ),
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+# Read once at import, like OUTLETS: a broken holdings.yaml crashes at startup.
+HOLDINGS = load_holdings()
+
+
+def read_quote(ticker: str) -> dict:
+    """One ticker: chaos -> fetch -> classify -> retry. Raises ToolError (same pattern as read_feed)."""
+
+    def call():
+        try:
+            chaos.maybe_fail(ticker)  # no-op unless CHAOS is set
+            return markets.get_quote(ticker)
+        except httpx2.HTTPError as exc:
+            # 429 is common on this unofficial endpoint: transient, retried.
+            # 404 = Yahoo doesn't know the symbol: my config is wrong (permission).
+            raise from_http_error(exc, ticker) from exc
+        except markets.MarketDataError as exc:
+            # Yahoo answered, but has fewer than 2 prices (e.g. newly listed). Not
+            # temporary within seconds, not the model's input, not my config: a
+            # valid "no" from the domain, so business. Accept it and report it.
+            raise ToolError(
+                "business", False,
+                f"{ticker}: not enough trading data to compute a daily change. "
+                "Do not retry. Report it as unavailable today.",
+                ticker,
+            ) from exc
+
+    return with_retries(call)
+
+
+def run_get_holdings_quotes(tool_input: dict) -> dict:
+    """Adapter: quotes for every holding in config; partial results + named gaps (5.3)."""
+    # tool_input is always {}: the tool takes no input (see the comment above the tool).
+    threshold = HOLDINGS["notable_move_pct"]
+    names = {h["ticker"]: h["name"] for h in HOLDINGS["holdings"]}
+    quotes, failures = fetch_all(list(names), read_quote)
+
+    if not quotes:
+        # Nothing to return. Each ticker already had its own retries.
+        raise ToolError(
+            "transient" if all(e.category == "transient" for e in failures.values()) else "permission",
+            False,
+            f"None of the holdings could be read ({', '.join(failures)}). "
+            "Do not retry. Report the markets section as unavailable.",
+            source="get_holdings_quotes",
+        )
+
+    return {
+        "quotes": [
+            {
+                **quote,
+                "name": names[ticker],  # how headlines name it, for search_news
+                # Decided in code, not by the model: a fixed rule should give the same
+                # answer every time (4.1). abs(): -3% matters as much as +3%.
+                "notable": abs(quote["change_pct"]) > threshold,
+            }
+            for ticker, quote in quotes.items()
+        ],
+        "failed": [err.to_dict() for err in failures.values()],
+        # So the model can say WHY a move counts as notable ("moved more than 1.5%").
+        "notable_move_pct": threshold,
+    }
 
 # What we send to the API on every call (tool definitions count as input tokens).
-TOOLS = [GET_WEATHER_TOOL, FETCH_FEED_TOOL, SEARCH_NEWS_TOOL]
+TOOLS = [GET_WEATHER_TOOL, FETCH_FEED_TOOL, SEARCH_NEWS_TOOL, GET_HOLDINGS_QUOTES_TOOL]
 # Tool name (what the model asks for) -> adapter (what we run).
 # Values are functions, not calls (no parentheses). Keys come from the tool dicts
 # so a rename can't break the lookup.
@@ -289,4 +377,5 @@ HANDLERS = {
     GET_WEATHER_TOOL["name"]: run_get_weather,
     FETCH_FEED_TOOL["name"]: run_fetch_feed,
     SEARCH_NEWS_TOOL["name"]: run_search_news,
+    GET_HOLDINGS_QUOTES_TOOL["name"]: run_get_holdings_quotes,
 }

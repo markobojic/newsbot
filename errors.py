@@ -80,7 +80,7 @@ def from_http_error(exc: httpx2.HTTPError, source: str) -> ToolError:
         # Only a human can fix it, so it is not validation.
         return ToolError(
             "permission", False,
-            f"{source} feed not found or rejected (HTTP {status}); the config probably "
+            f"{source} not found or rejected (HTTP {status}); the config probably "
             "needs updating. Do not retry. Report it as a coverage gap.",
             source,
         )

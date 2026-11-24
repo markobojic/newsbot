@@ -147,7 +147,7 @@ currency, and `as_of`.
 - [x] Step 4: error handling + retry policy in the loop
 - [x] Step 5: chaos switch
 - [x] Step 6a: `search_news`
-- [ ] Step 6b: `get_holdings_quotes`
+- [x] Step 6b: `get_holdings_quotes`
 - [ ] Step 6c: `get_rsd_rates`
 - [ ] Step 7: tests
 - [ ] Break it
