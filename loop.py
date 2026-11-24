@@ -111,5 +111,5 @@ def run(question: str) -> str:
 
 
 if __name__ == "__main__":
-    answer = run("How are my stocks doing?")
+    answer = run("What is exchange rate in Serbia")
     print(answer)

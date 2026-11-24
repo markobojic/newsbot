@@ -148,7 +148,7 @@ currency, and `as_of`.
 - [x] Step 5: chaos switch
 - [x] Step 6a: `search_news`
 - [x] Step 6b: `get_holdings_quotes`
-- [ ] Step 6c: `get_rsd_rates`
+- [x] Step 6c: `get_rsd_rate`
 - [ ] Step 7: tests
 - [ ] Break it
 - [ ] Check (2-3 exam questions)

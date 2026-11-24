@@ -1,10 +1,12 @@
+from datetime import date, datetime
 from itertools import zip_longest
+from zoneinfo import ZoneInfo
 
 import httpx2
 
 from config import CAMPS, load_holdings, load_sources
 from errors import ToolError, from_http_error, with_retries
-from tools import chaos, markets, rss, weather
+from tools import chaos, fx, markets, rss, weather
 from tools.parallel import fetch_all
 from tools.text import normalize
 
@@ -368,8 +370,79 @@ def run_get_holdings_quotes(tool_input: dict) -> dict:
         "notable_move_pct": threshold,
     }
 
+# --- Tool 5: get_rsd_rate -----------------------------------------------------
+# No parameters: the brief always shows EUR -> RSD (DECISIONS.md). NBS publishes
+# on working days only, so on a weekend or holiday the latest list is older than
+# today. That is correct, not an error; only a list too old for that is an error.
+MAX_LIST_AGE_DAYS = 7  # longest holiday break (Orthodox Easter) is 4-5 days
+
+GET_RSD_RATE_TOOL = {
+    "name": "get_rsd_rate",
+    "description": (
+        "Get the official National Bank of Serbia (NBS) middle exchange rate for the "
+        "euro: how many Serbian dinars (RSD) one euro (EUR) is worth, from the latest "
+        "NBS exchange rate list (it takes no input). Use it whenever the user asks "
+        "about the euro, the dinar or the exchange rate, and for the markets section "
+        "of the brief. Returns rate (RSD for 1 EUR), list_date (YYYY-MM-DD, the day "
+        "NBS published that list) and list_number. "
+        "NBS publishes only on working days, so on weekends and holidays list_date is "
+        "the last working day: that rate is still the official one, not an error. "
+        "Cite it with the list date, e.g. \"EUR = 117.64 RSD (NBS, list of 20 Nov)\", "
+        "never with today's date. "
+        "It does NOT return other currencies, past rates, or the buying/selling rates "
+        "banks use; for those, say they are not supported."
+    ),
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+
+def today_in_belgrade() -> date:
+    """Today's date where NBS (and the reader) are; a function so tests can replace it."""
+    return datetime.now(ZoneInfo("Europe/Belgrade")).date()
+
+
+def run_get_rsd_rate(tool_input: dict) -> dict:
+    """Adapter: the latest NBS list for today. One source, one value: no partial results."""
+    today = today_in_belgrade()
+
+    def call():
+        try:
+            chaos.maybe_fail("nbs")  # no-op unless CHAOS is set
+            return fx.get_eur_rsd(today)
+        except httpx2.HTTPError as exc:
+            raise from_http_error(exc, "nbs") from exc
+        except fx.FxParseError as exc:
+            # NBS answered but the page changed: only I can fix the scraper.
+            raise ToolError(
+                "permission", False,
+                "NBS page layout changed; the EUR rate could not be read. Do not retry. "
+                "Report EUR -> RSD as unavailable.",
+                "nbs",
+            ) from exc
+
+    result = with_retries(call)
+    age_days = (today - date.fromisoformat(result["list_date"])).days
+    if age_days > MAX_LIST_AGE_DAYS:
+        # Too old for a weekend or holiday: the page stopped updating or the parser
+        # read the wrong list. A human has to look. Not returned at all, so an old
+        # rate can't end up in the brief looking like today's.
+        raise ToolError(
+            "permission", False,
+            f"Latest NBS list is from {result['list_date']}, {age_days} days old. "
+            "Do not use it. Report EUR -> RSD as unavailable.",
+            "nbs",
+        )
+    return result
+
+
 # What we send to the API on every call (tool definitions count as input tokens).
-TOOLS = [GET_WEATHER_TOOL, FETCH_FEED_TOOL, SEARCH_NEWS_TOOL, GET_HOLDINGS_QUOTES_TOOL]
+TOOLS = [
+    GET_WEATHER_TOOL,
+    FETCH_FEED_TOOL,
+    SEARCH_NEWS_TOOL,
+    GET_HOLDINGS_QUOTES_TOOL,
+    GET_RSD_RATE_TOOL,
+]
 # Tool name (what the model asks for) -> adapter (what we run).
 # Values are functions, not calls (no parentheses). Keys come from the tool dicts
 # so a rename can't break the lookup.
@@ -378,4 +451,5 @@ HANDLERS = {
     FETCH_FEED_TOOL["name"]: run_fetch_feed,
     SEARCH_NEWS_TOOL["name"]: run_search_news,
     GET_HOLDINGS_QUOTES_TOOL["name"]: run_get_holdings_quotes,
+    GET_RSD_RATE_TOOL["name"]: run_get_rsd_rate,
 }
