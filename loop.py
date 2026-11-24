@@ -1,4 +1,8 @@
-"""Phase 1: hand-written agentic loop with two tools."""
+"""Hand-written agentic loop. Tools come from tools/definitions.py.
+
+Tool failures come back as tool_results with is_error (see run_tool), so one dead
+source never crashes the run (Phase 2).
+"""
 
 import json
 import sys

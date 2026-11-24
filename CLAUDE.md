@@ -8,7 +8,7 @@ agent that sends me a Telegram message at 08:30.
 - My notes and exam traps: @notes/SCRATCHPAD.md
 - Exam guide (read the relevant task statement when reviewing): docs/CCA-F-exam-guide.pdf
 
-**Current phase: 2**
+**Current phase: 3**
 
 ## How to help me
 - I am learning by writing the code myself.

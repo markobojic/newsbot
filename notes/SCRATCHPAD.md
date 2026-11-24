@@ -7,7 +7,7 @@ Short, dated notes. This becomes my revision sheet before the exam.
 |---|---|---|---|
 | 0 | 2026-11-16 (Check skipped) | One Messages API request/response: `model`, `max_tokens`, `system`, `messages` in; `content`, `stop_reason`, `usage` out | `create({})` - SDK takes keyword args only. `max_tokens=500` cut the answer off because thinking used 319 of the 500 tokens |
 | 1 | 2026-11-16 (Break it: only #4; Check skipped) | Tool definitions (name/description/input_schema) and a hand-written loop driven by `stop_reason`; the model asks, MY code runs the tool | Thought the loop stops on `tool_use`. It's the opposite: `tool_use` = continue, `end_turn` = stop. Forgot the assistant turn sits between question and tool_results |
-| 2 | | | |
+| 2 | 2026-11-24 | Structured tool errors (`ToolError`: category + `is_retryable` + message), retries in the adapters, partial results (`searched` vs `failed_sources`), a chaos switch to fake outages; 5 tools, 62 tests without network | Called 429 and 404 validation (validation = the INPUT is wrong). Wanted the error to say "server is down" (a claim without evidence). Wanted "only today's rate" (NBS has no list on weekends/holidays). Thought Claude knows the `ToolError` class (it only sees `is_error` + text) |
 
 ## Phase 0 notes (2026-11-16)
 
